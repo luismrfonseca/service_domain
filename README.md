@@ -17,6 +17,15 @@ O **Service Domain** é um serviço intermediário robusto e de alta velocidade 
 
 ---
 
+## 🗺️ Arquitetura e Comunicação entre Módulos
+
+O diagrama abaixo ilustra o fluxo de comunicação e a arquitetura geral do sistema, conectando as aplicações satélite, a API local, a base de dados do Service Domain e o ERP PHC CS:
+
+
+![service_domain_architecture](img/diagrama-arquitetura.png)
+
+---
+
 ## 📁 Estrutura do Projeto
 
 A solução está organizada em três projetos principais e um projeto de testes:
@@ -35,6 +44,8 @@ service_domain/
 ├── db_migration_initial.sql    # Script SQL completo de DDL da BD local
 └── phc_trigger_table.sql       # Script de integração na base de dados do PHC
 ```
+
+
 
 ---
 
