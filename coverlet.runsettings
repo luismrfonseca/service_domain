@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat Code Coverage">
+        <Configuration>
+          <!-- Exclude Worker assembly, Migrations namespace/files, and Program class -->
+          <Exclude>[ServiceDomain.Worker]*,[ServiceDomain.Core]*.Migrations.*,[*]Program</Exclude>
+          <ExcludeByFile>**/Migrations/*.cs,**/Program.cs,**/Workers/*.cs</ExcludeByFile>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

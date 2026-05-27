@@ -1,0 +1,122 @@
+@hostname = localhost
+@port = 5001
+@host = https://{{hostname}}:{{port}}
+@contentType = application/json
+
+### 1. Obter Catálogo de Produtos
+GET {{host}}/api/produtos
+Accept: {{contentType}}
+
+### 2. Obter Catálogo de Produtos com Filtro
+GET {{host}}/api/produtos?searchRef=PROD001&searchDesignacao=Parafuso
+Accept: {{contentType}}
+
+### 3. Listar Clientes Locais
+GET {{host}}/api/clientes
+Accept: {{contentType}}
+
+### 4. Criar Novo Cliente (Vendedores)
+# Este pedido criará o cliente localmente e gerará o evento na tabela SyncOutbox
+POST {{host}}/api/clientes
+Content-Type: {{contentType}}
+
+{
+  "nome": "Supermercado Central de Aveiro, Lda.",
+  "nomeFiscal": "PT501234567",
+  "email": "compras@superaveiro.pt"
+}
+
+### 5. Listar Encomendas Locais (Geral)
+GET {{host}}/api/encomendas
+Accept: {{contentType}}
+
+### 6. Criar Nova Encomenda (Vendedores / Portal)
+# Cria a encomenda localmente, calcula o total e enfileira no SyncOutbox
+POST {{host}}/api/encomendas
+Content-Type: {{contentType}}
+
+{
+  "clienteNo": 1002,
+  "linhas": [
+    {
+      "ref": "P00234",
+      "designacao": "Parafuso Inox Sextavado M8",
+      "quantidade": 150.0000,
+      "preco": 0.1250,
+      "lote": "L2026-A1"
+    },
+    {
+      "ref": "P00567",
+      "designacao": "Porca Inox M8",
+      "quantidade": 150.0000,
+      "preco": 0.0420,
+      "lote": "L2026-A1"
+    }
+  ]
+}
+
+### 7. Consultar Stocks Locais
+GET {{host}}/api/stocks
+Accept: {{contentType}}
+
+### 8. Consultar Stock com Filtros
+GET {{host}}/api/stocks?refCode=P00234&armazem=1
+Accept: {{contentType}}
+
+### 9. Registar Movimento de Stock (Logística)
+POST {{host}}/api/stocks/movimentos
+Content-Type: {{contentType}}
+
+{
+  "ref": "P00234",
+  "loteCodigo": "L2026-A1",
+  "armazem": 1,
+  "localizacao": "CORREDOR-A-PRATELEIRA-3",
+  "quantidade": 500.0000
+}
+
+### =========================================================================
+### ENDPOINTS DE LOGÍSTICA (App Web React)
+### =========================================================================
+
+### 10. Listar Encomendas de Clientes prontas para Picking
+GET {{host}}/api/logistica/picking/pendentes
+Accept: {{contentType}}
+
+### 11. Submeter Confirmação de Picking (Picking Confirmado)
+# Cria localmente a Guia de Remessa e enfileira no Outbox para sincronizar no ERP
+POST {{host}}/api/logistica/picking
+Content-Type: {{contentType}}
+
+{
+  "encomendaId": "9b90c9b0-faf1-46b9-892f-f7f71f5d426d",
+  "linhas": [
+    {
+      "linhaId": "a1f0c9b0-faf1-46b9-892f-f7f71f5d426d",
+      "quantidadeRecolhida": 150.0000,
+      "lote": "L2026-A1",
+      "localizacao": "CORREDOR-A-PRATELEIRA-3"
+    }
+  ]
+}
+
+### 12. Listar Encomendas de Compras de Fornecedores prontas para Receção
+GET {{host}}/api/logistica/rececao/pendentes
+Accept: {{contentType}}
+
+### 13. Submeter Confirmação de Receção de Compras (Entrada de Artigos)
+# Cria a Guia de Receção local, atualiza o stock e enfileira no Outbox
+POST {{host}}/api/logistica/rececao
+Content-Type: {{contentType}}
+
+{
+  "encomendaId": "8c80c9b0-faf1-46b9-892f-f7f71f5d426d",
+  "linhas": [
+    {
+      "linhaId": "b2e0c9b0-faf1-46b9-892f-f7f71f5d426d",
+      "quantidadeRecebida": 200.0000,
+      "lote": "LOTE-COMPRA-XYZ",
+      "localizacao": "CORREDOR-B-PRATELEIRA-1"
+    }
+  ]
+}

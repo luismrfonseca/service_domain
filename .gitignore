@@ -1,0 +1,42 @@
+## Build Artifacts
+bin/
+obj/
+[Xx]64/
+[Xx]86/
+[Aa]rm/
+[Aa]rm64/
+build/
+bin/Debug/
+bin/Release/
+
+## Test Results
+TestResults/
+
+## User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+## Visual Studio cache and settings
+.vs/
+.vs*
+*.opensdf
+*.sdf
+*.cache
+*.ole
+
+## VS Code settings
+.vscode/
+
+## Rider settings
+.idea/
+
+## OS-generated files
+.DS_Store
+Thumbs.db
+
+## Local app settings/secrets
+appsettings.json.user
+secrets.json
