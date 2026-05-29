@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ServiceDomain.Core.Data;
 
@@ -11,9 +12,11 @@ using ServiceDomain.Core.Data;
 namespace ServiceDomain.Api.Migrations
 {
     [DbContext(typeof(ServiceDomainDbContext))]
-    partial class ServiceDomainDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260529113417_AddWmsOperations")]
+    partial class AddWmsOperations
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

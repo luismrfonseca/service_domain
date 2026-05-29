@@ -19,6 +19,10 @@ namespace ServiceDomain.Core.Data
         public DbSet<EncomendaLinha> EncomendaLinhas => Set<EncomendaLinha>();
         public DbSet<SyncOutbox> SyncOutbox => Set<SyncOutbox>();
         public DbSet<SyncInbox> SyncInbox => Set<SyncInbox>();
+        public DbSet<OrdemContagem> OrdensContagem => Set<OrdemContagem>();
+        public DbSet<LinhaContagem> LinhasContagem => Set<LinhaContagem>();
+        public DbSet<Rma> Rmas => Set<Rma>();
+        public DbSet<RmaLinha> RmaLinhas => Set<RmaLinha>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -31,6 +35,9 @@ namespace ServiceDomain.Core.Data
                 entity.Property(e => e.Ref).HasMaxLength(50).IsRequired();
                 entity.Property(e => e.Designacao).HasMaxLength(200);
                 entity.Property(e => e.PhcStamp).HasMaxLength(25).IsRequired();
+                entity.Property(e => e.Gtin).HasMaxLength(14);
+                entity.Property(e => e.PesoUnitarioKg).HasPrecision(18, 4);
+                entity.Property(e => e.VolumeUnitarioM3).HasPrecision(18, 6);
 
                 entity.HasIndex(e => e.Ref).IsUnique();
                 entity.HasIndex(e => e.PhcStamp).IsUnique();
@@ -55,6 +62,13 @@ namespace ServiceDomain.Core.Data
                 entity.Property(e => e.Armazem).IsRequired();
                 entity.Property(e => e.Nome).HasMaxLength(100);
                 entity.Property(e => e.PhcStamp).HasMaxLength(25).IsRequired();
+                entity.Property(e => e.Zona).HasMaxLength(50);
+                entity.Property(e => e.Corredor).HasMaxLength(20);
+                entity.Property(e => e.Estante).HasMaxLength(20);
+                entity.Property(e => e.Prateleira).HasMaxLength(20);
+                entity.Property(e => e.Alveolo).HasMaxLength(20);
+                entity.Property(e => e.MaxPesoKg).HasPrecision(18, 4);
+                entity.Property(e => e.MaxVolumeM3).HasPrecision(18, 6);
 
                 entity.HasIndex(e => e.Armazem).IsUnique();
                 entity.HasIndex(e => e.PhcStamp).IsUnique();
@@ -157,6 +171,65 @@ namespace ServiceDomain.Core.Data
                 entity.Property(e => e.Payload).IsRequired();
 
                 entity.HasIndex(e => new { e.Status, e.CreatedAt });
+            });
+
+            // OrdemContagem Configuration
+            modelBuilder.Entity<OrdemContagem>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.TipoContagem).HasMaxLength(20).IsRequired();
+                entity.Property(e => e.Estado).HasMaxLength(20).IsRequired();
+                entity.Property(e => e.SupervisorId).HasMaxLength(50);
+
+                entity.HasIndex(e => e.Estado);
+            });
+
+            // LinhaContagem Configuration
+            modelBuilder.Entity<LinhaContagem>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.QuantidadeSistema).HasPrecision(18, 4);
+                entity.Property(e => e.QuantidadeContada1).HasPrecision(18, 4);
+                entity.Property(e => e.QuantidadeContada2).HasPrecision(18, 4);
+                entity.Property(e => e.Operador1Id).HasMaxLength(50);
+                entity.Property(e => e.Operador2Id).HasMaxLength(50);
+
+                entity.HasOne(d => d.Ordem)
+                    .WithMany(p => p.Linhas)
+                    .HasForeignKey(d => d.OrdemId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(d => d.Stock)
+                    .WithMany()
+                    .HasForeignKey(d => d.StockId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            // Rma Configuration
+            modelBuilder.Entity<Rma>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.RmaCodigo).HasMaxLength(30).IsRequired();
+                entity.Property(e => e.Status).HasMaxLength(20).IsRequired();
+                entity.Property(e => e.InvoiceRef).HasMaxLength(50);
+
+                entity.HasIndex(e => e.RmaCodigo).IsUnique();
+                entity.HasIndex(e => e.Status);
+            });
+
+            // RmaLinha Configuration
+            modelBuilder.Entity<RmaLinha>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Ref).HasMaxLength(50).IsRequired();
+                entity.Property(e => e.Quantidade).HasPrecision(18, 4);
+                entity.Property(e => e.Grading).HasMaxLength(10);
+                entity.Property(e => e.DestinoLocalizacao).HasMaxLength(50);
+
+                entity.HasOne(d => d.Rma)
+                    .WithMany(p => p.Linhas)
+                    .HasForeignKey(d => d.RmaId)
+                    .OnDelete(DeleteBehavior.Cascade);
             });
         }
     }

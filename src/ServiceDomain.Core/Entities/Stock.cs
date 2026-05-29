@@ -11,6 +11,8 @@ namespace ServiceDomain.Core.Entities
         public string Localizacao { get; set; } = string.Empty;
         public decimal Quantidade { get; set; }
         public string PhcStamp { get; set; } = string.Empty; // Maps to individual stock row or tracking key in PHC
+        public DateTime? DataValidade { get; set; }
+        public DateTime? DataUltimaContagem { get; set; }
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     }
 }
