@@ -3,12 +3,12 @@ FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
 # Copy csproj files and restore dependencies
-COPY ["src/ServiceDomain.Api/ServiceDomain.Api.csproj", "src/ServiceDomain.Api/"]
-COPY ["src/ServiceDomain.Core/ServiceDomain.Core.csproj", "src/ServiceDomain.Core/"]
+COPY ["service_domain_api/src/ServiceDomain.Api/ServiceDomain.Api.csproj", "src/ServiceDomain.Api/"]
+COPY ["service_domain_api/src/ServiceDomain.Core/ServiceDomain.Core.csproj", "src/ServiceDomain.Core/"]
 RUN dotnet restore "src/ServiceDomain.Api/ServiceDomain.Api.csproj"
 
 # Copy remaining source code and publish
-COPY . .
+COPY service_domain_api/ .
 WORKDIR "/src/src/ServiceDomain.Api"
 RUN dotnet publish "ServiceDomain.Api.csproj" -c Release -o /app/publish
 

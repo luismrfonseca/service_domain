@@ -3,12 +3,12 @@ FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
 # Copy csproj files and restore
-COPY ["src/ServiceDomain.Worker/ServiceDomain.Worker.csproj", "src/ServiceDomain.Worker/"]
-COPY ["src/ServiceDomain.Core/ServiceDomain.Core.csproj", "src/ServiceDomain.Core/"]
+COPY ["service_domain_api/src/ServiceDomain.Worker/ServiceDomain.Worker.csproj", "src/ServiceDomain.Worker/"]
+COPY ["service_domain_api/src/ServiceDomain.Core/ServiceDomain.Core.csproj", "src/ServiceDomain.Core/"]
 RUN dotnet restore "src/ServiceDomain.Worker/ServiceDomain.Worker.csproj"
 
 # Copy remaining source code and publish
-COPY . .
+COPY service_domain_api/ .
 WORKDIR "/src/src/ServiceDomain.Worker"
 RUN dotnet publish "ServiceDomain.Worker.csproj" -c Release -o /app/publish
 
