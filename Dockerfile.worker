@@ -13,7 +13,7 @@ WORKDIR "/src/src/ServiceDomain.Worker"
 RUN dotnet publish "ServiceDomain.Worker.csproj" -c Release -o /app/publish
 
 # Stage 2: Runtime Image
-FROM mcr.microsoft.com/dotnet/runtime:8.0 AS runtime
+FROM mcr.microsoft.com/dotnet/runtime:10.0 AS runtime
 WORKDIR /app
 COPY --from=build /app/publish .
 
