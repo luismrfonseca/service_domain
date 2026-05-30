@@ -1,0 +1,25 @@
+version: 2
+updates:
+  # Maintain C# dependencies (NuGet)
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Maintain JavaScript dependencies (npm)
+  - package-ecosystem: "npm"
+    directory: "/logistica-app"
+    schedule:
+      interval: "weekly"
+
+  # Maintain GitHub Actions dependencies
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Maintain Docker dependencies
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"

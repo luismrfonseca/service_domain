@@ -116,5 +116,103 @@ namespace ServiceDomain.Tests.Controllers
             var clientes = Assert.IsAssignableFrom<System.Collections.Generic.IEnumerable<Cliente>>(okResult.Value);
             Assert.Equal(2, clientes.Count());
         }
+
+        [Fact]
+        public async Task UpdateCliente_ShouldUpdatePendingOutbox_WhenClientNotSynced()
+        {
+            // Arrange
+            using var context = GetInMemoryDbContext();
+            var clientId = Guid.NewGuid();
+            var cliente = new Cliente 
+            { 
+                Id = clientId, 
+                Nome = "Original Nome", 
+                NomeFiscal = "PT111", 
+                Email = "orig@email.com", 
+                PhcStamp = "PENDENTE-12345", 
+                No = 0 
+            };
+            var pendingOutbox = new SyncOutbox
+            {
+                Id = Guid.NewGuid(),
+                EntityType = "Cliente",
+                EntityId = clientId,
+                Payload = "{}",
+                Status = "Pendente",
+                CreatedAt = DateTime.UtcNow
+            };
+
+            context.Clientes.Add(cliente);
+            context.SyncOutbox.Add(pendingOutbox);
+            await context.SaveChangesAsync();
+
+            var controller = new ClientesController(context);
+            var dto = new CreateClienteDto
+            {
+                Nome = "Novo Nome",
+                NomeFiscal = "PT222",
+                Email = "novo@email.com"
+            };
+
+            // Act
+            var result = await controller.UpdateCliente(clientId, dto);
+
+            // Assert
+            Assert.IsType<OkObjectResult>(result);
+
+            // Verify local DB updated
+            var updatedClient = await context.Clientes.FindAsync(clientId);
+            Assert.NotNull(updatedClient);
+            Assert.Equal("Novo Nome", updatedClient.Nome);
+            Assert.Equal("PT222", updatedClient.NomeFiscal);
+            Assert.Equal("novo@email.com", updatedClient.Email);
+
+            // Verify existing outbox item payload updated
+            var updatedOutbox = await context.SyncOutbox.FindAsync(pendingOutbox.Id);
+            Assert.NotNull(updatedOutbox);
+            Assert.Contains("Novo Nome", updatedOutbox.Payload);
+            Assert.Contains("PT222", updatedOutbox.Payload);
+        }
+
+        [Fact]
+        public async Task UpdateCliente_ShouldCreateClienteUpdateOutbox_WhenClientIsAlreadySynced()
+        {
+            // Arrange
+            using var context = GetInMemoryDbContext();
+            var clientId = Guid.NewGuid();
+            var cliente = new Cliente 
+            { 
+                Id = clientId, 
+                Nome = "Original Nome", 
+                NomeFiscal = "PT111", 
+                Email = "orig@email.com", 
+                PhcStamp = "ERPSTAMP999", 
+                No = 123 
+            };
+
+            context.Clientes.Add(cliente);
+            await context.SaveChangesAsync();
+
+            var controller = new ClientesController(context);
+            var dto = new CreateClienteDto
+            {
+                Nome = "Novo Nome Synced",
+                NomeFiscal = "PT333",
+                Email = "novo.synced@email.com"
+            };
+
+            // Act
+            var result = await controller.UpdateCliente(clientId, dto);
+
+            // Assert
+            Assert.IsType<OkObjectResult>(result);
+
+            // Verify new ClienteUpdate Outbox message created
+            var outboxItem = await context.SyncOutbox.FirstOrDefaultAsync(o => o.EntityType == "ClienteUpdate" && o.EntityId == clientId);
+            Assert.NotNull(outboxItem);
+            Assert.Equal("Pendente", outboxItem.Status);
+            Assert.Contains("Novo Nome Synced", outboxItem.Payload);
+            Assert.Contains("ERPSTAMP999", outboxItem.Payload);
+        }
     }
 }

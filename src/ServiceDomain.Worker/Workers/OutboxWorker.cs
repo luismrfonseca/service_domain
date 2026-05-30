@@ -121,6 +121,10 @@ namespace ServiceDomain.Worker.Workers
                 {
                     await ProcessClienteSyncAsync(dbContext, connection, transaction, message, stoppingToken);
                 }
+                else if (message.EntityType == "ClienteUpdate")
+                {
+                    await ProcessClienteUpdateSyncAsync(dbContext, connection, transaction, message, stoppingToken);
+                }
                 else if (message.EntityType == "GuiaRemessa")
                 {
                     await ProcessGuiaRemessaSyncAsync(dbContext, connection, transaction, message, stoppingToken);
@@ -289,6 +293,36 @@ namespace ServiceDomain.Worker.Workers
             }
 
             _logger.LogInformation("Successfully inserted Cliente No {No} with stamp {Stamp} into PHC.", nextCliNo, phcStamp);
+        }
+
+        private async Task ProcessClienteUpdateSyncAsync(ServiceDomainDbContext dbContext, SqlConnection connection, SqlTransaction transaction, SyncOutbox message, CancellationToken stoppingToken)
+        {
+            using var doc = JsonDocument.Parse(message.Payload);
+            var root = doc.RootElement;
+
+            string nome = root.GetProperty("Nome").GetString() ?? string.Empty;
+            string nomeFiscal = root.TryGetProperty("NomeFiscal", out var nfEl) ? nfEl.GetString() ?? "" : "";
+            string email = root.TryGetProperty("Email", out var emEl) ? emEl.GetString() ?? "" : "";
+            string phcStamp = root.GetProperty("PhcStamp").GetString() ?? string.Empty;
+
+            _logger.LogInformation("Processing SQL Direct update into PHC for Cliente. Stamp: {Stamp}", phcStamp);
+
+            string updateCliSql = @"
+                UPDATE cl 
+                SET nome = @Nome, nif = @Nif, email = @Email
+                WHERE cl_stamp = @Stamp";
+
+            using (var cmd = new SqlCommand(updateCliSql, connection, transaction))
+            {
+                cmd.Parameters.AddWithValue("@Stamp", phcStamp);
+                cmd.Parameters.AddWithValue("@Nome", nome);
+                cmd.Parameters.AddWithValue("@Nif", nomeFiscal);
+                cmd.Parameters.AddWithValue("@Email", email);
+
+                await cmd.ExecuteNonQueryAsync(stoppingToken);
+            }
+
+            _logger.LogInformation("Successfully updated Cliente with stamp {Stamp} in PHC.", phcStamp);
         }
 
         private async Task ProcessGuiaRemessaSyncAsync(ServiceDomainDbContext dbContext, SqlConnection connection, SqlTransaction transaction, SyncOutbox message, CancellationToken stoppingToken)

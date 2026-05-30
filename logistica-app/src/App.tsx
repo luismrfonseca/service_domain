@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Package, ArrowDown, ClipboardList, Compass, Box, Truck, RotateCcw, Search, User, LogOut } from 'lucide-react';
+import { Package, ArrowDown, ClipboardList, Compass, Box, Truck, RotateCcw, Search, User, LogOut, TrendingUp } from 'lucide-react';
 import { InboundPanel } from './components/InboundPanel';
 import { InventoryPanel } from './components/InventoryPanel';
 import { PickingPanel } from './components/PickingPanel';
@@ -7,8 +7,9 @@ import { PackingPanel } from './components/PackingPanel';
 import { ShippingPanel } from './components/ShippingPanel';
 import { RmaPanel } from './components/RmaPanel';
 import { LoginPanel } from './components/LoginPanel';
+import { VendedoresPanel } from './components/VendedoresPanel';
 
-type TabType = 'inbound' | 'inventory' | 'picking' | 'packing' | 'shipping' | 'rma';
+type TabType = 'inbound' | 'inventory' | 'picking' | 'packing' | 'shipping' | 'rma' | 'vendedores';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -20,7 +21,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabType>(() => {
     // Read initial hash route
     const hash = window.location.hash.replace('#/', '');
-    const validTabs: TabType[] = ['inbound', 'inventory', 'picking', 'packing', 'shipping', 'rma'];
+    const validTabs: TabType[] = ['inbound', 'inventory', 'picking', 'packing', 'shipping', 'rma', 'vendedores'];
     if (validTabs.includes(hash as TabType)) {
       return hash as TabType;
     }
@@ -34,7 +35,7 @@ function App() {
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace('#/', '');
-      const validTabs: TabType[] = ['inbound', 'inventory', 'picking', 'packing', 'shipping', 'rma'];
+      const validTabs: TabType[] = ['inbound', 'inventory', 'picking', 'packing', 'shipping', 'rma', 'vendedores'];
       
       if (hash === 'login') {
         if (isAuthenticated) {
@@ -63,7 +64,7 @@ function App() {
       window.location.hash = '#/login';
     } else {
       const hash = window.location.hash.replace('#/', '');
-      const validTabs: TabType[] = ['inbound', 'inventory', 'picking', 'packing', 'shipping', 'rma'];
+      const validTabs: TabType[] = ['inbound', 'inventory', 'picking', 'packing', 'shipping', 'rma', 'vendedores'];
       if (!validTabs.includes(hash as TabType)) {
         window.location.hash = '#/' + activeTab;
       }
@@ -124,6 +125,8 @@ function App() {
         return <ShippingPanel />;
       case 'rma':
         return <RmaPanel />;
+      case 'vendedores':
+        return <VendedoresPanel />;
       default:
         return <InboundPanel />;
     }
@@ -186,6 +189,14 @@ function App() {
             onClick={() => navigateTo('rma')}
           >
             <RotateCcw /> <span>Logística Inversa</span>
+          </button>
+
+          <button
+            className={`nav-btn ${activeTab === 'vendedores' ? 'active' : ''}`}
+            onClick={() => navigateTo('vendedores')}
+            id="nav-vendedores-btn"
+          >
+            <TrendingUp /> <span>Portal Vendedores</span>
           </button>
         </nav>
 

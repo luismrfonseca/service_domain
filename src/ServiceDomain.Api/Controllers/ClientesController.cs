@@ -95,5 +95,105 @@ namespace ServiceDomain.Api.Controllers
                 transaction?.Dispose();
             }
         }
+
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateCliente(Guid id, [FromBody] CreateClienteDto dto)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            var cliente = await _context.Clientes.FindAsync(id);
+            if (cliente == null)
+            {
+                return NotFound(new { Message = $"Cliente com ID {id} não encontrado." });
+            }
+
+            Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? transaction = null;
+            try
+            {
+                transaction = await _context.Database.BeginTransactionAsync();
+
+                // Update local model
+                cliente.Nome = dto.Nome;
+                cliente.NomeFiscal = dto.NomeFiscal;
+                cliente.Email = dto.Email;
+                cliente.UpdatedAt = DateTime.UtcNow;
+
+                _context.Clientes.Update(cliente);
+                await _context.SaveChangesAsync();
+
+                // Check sync status
+                if (cliente.PhcStamp.StartsWith("PENDENTE-"))
+                {
+                    // Client has not synced to PHC yet. We find its pending outbox message and update it
+                    var pendingOutbox = await _context.SyncOutbox
+                        .FirstOrDefaultAsync(o => o.EntityType == "Cliente" && o.EntityId == cliente.Id && o.Status == "Pendente");
+                    
+                    if (pendingOutbox != null)
+                    {
+                        var syncPayload = new
+                        {
+                            LocalId = cliente.Id,
+                            Nome = cliente.Nome,
+                            NomeFiscal = cliente.NomeFiscal,
+                            Email = cliente.Email
+                        };
+                        pendingOutbox.Payload = JsonSerializer.Serialize(syncPayload);
+                        _context.SyncOutbox.Update(pendingOutbox);
+                        await _context.SaveChangesAsync();
+                    }
+                    else
+                    {
+                        await CreateClienteUpdateOutboxAsync(cliente);
+                    }
+                }
+                else
+                {
+                    await CreateClienteUpdateOutboxAsync(cliente);
+                }
+
+                await transaction.CommitAsync();
+                return Ok(new { Message = "Cliente atualizado com sucesso localmente.", LocalId = cliente.Id });
+            }
+            catch (Exception ex)
+            {
+                if (transaction != null)
+                {
+                    await transaction.RollbackAsync();
+                }
+                return StatusCode(500, new { Message = "Erro ao atualizar o cliente localmente.", Error = ex.Message });
+            }
+            finally
+            {
+                transaction?.Dispose();
+            }
+        }
+
+        private async Task CreateClienteUpdateOutboxAsync(Cliente cliente)
+        {
+            var syncPayload = new
+            {
+                LocalId = cliente.Id,
+                PhcStamp = cliente.PhcStamp,
+                Nome = cliente.Nome,
+                NomeFiscal = cliente.NomeFiscal,
+                Email = cliente.Email
+            };
+
+            var outboxItem = new SyncOutbox
+            {
+                EntityType = "ClienteUpdate",
+                EntityId = cliente.Id,
+                Payload = JsonSerializer.Serialize(syncPayload),
+                Status = "Pendente",
+                RetryCount = 0,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.SyncOutbox.Add(outboxItem);
+            await _context.SaveChangesAsync();
+        }
     }
 }

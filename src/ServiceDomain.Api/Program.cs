@@ -36,7 +36,8 @@ builder.Services.AddDbContext<ServiceDomainDbContext>(options =>
     }
     else
     {
-        options.UseInMemoryDatabase("ServiceDomainDb");
+        options.UseInMemoryDatabase("ServiceDomainDb")
+               .ConfigureWarnings(x => x.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning));
     }
 });
 

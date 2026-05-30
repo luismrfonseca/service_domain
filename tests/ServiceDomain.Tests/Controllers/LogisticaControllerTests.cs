@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ServiceDomain.Api.Controllers;
@@ -782,6 +783,346 @@ namespace ServiceDomain.Tests.Controllers
             // Verify RMA status is Concluida
             var finalRma = await context.Rmas.FindAsync(rmaId);
             Assert.Equal("Concluida", finalRma.Status);
+        }
+
+        [Fact]
+        public async Task GetContagensPendentes_ShouldReturnOnlyNonCompletedOrders()
+        {
+            // Arrange
+            using var context = GetInMemoryDbContext();
+            var order1 = new OrdemContagem { Id = Guid.NewGuid(), Estado = "PENDENTE", SupervisorId = "sup1" };
+            var order2 = new OrdemContagem { Id = Guid.NewGuid(), Estado = "EM_RECONTAGEM", SupervisorId = "sup1" };
+            var order3 = new OrdemContagem { Id = Guid.NewGuid(), Estado = "CONCLUIDO", SupervisorId = "sup1" };
+            context.OrdensContagem.AddRange(order1, order2, order3);
+            await context.SaveChangesAsync();
+
+            var controller = new LogisticaController(context);
+
+            // Act
+            var result = await controller.GetContagensPendentes();
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            var orders = Assert.IsAssignableFrom<IEnumerable<OrdemContagem>>(okResult.Value);
+            Assert.Equal(2, orders.Count());
+            Assert.Contains(orders, o => o.Id == order1.Id);
+            Assert.Contains(orders, o => o.Id == order2.Id);
+            Assert.DoesNotContain(orders, o => o.Id == order3.Id);
+        }
+
+        [Fact]
+        public void ComunicarGuiaTransporteAT_ShouldReturnOkWithATCode()
+        {
+            // Arrange
+            using var context = GetInMemoryDbContext();
+            var controller = new LogisticaController(context);
+            var payload = JsonDocument.Parse("{\"encomendaId\":\"88af796d-8121-47ec-9d4d-13e1cd8c0e79\"}").RootElement;
+
+            // Act
+            var result = controller.ComunicarGuiaTransporteAT(payload);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            dynamic value = okResult.Value!;
+            Assert.Equal("Comunicado com Sucesso", value.GetType().GetProperty("Estado").GetValue(value));
+            Assert.NotNull(value.GetType().GetProperty("CodigoAT").GetValue(value));
+            Assert.Contains("<doc:CodigoIdentificacaoAT>", value.GetType().GetProperty("SoapEnvelope").GetValue(value));
+        }
+
+        [Fact]
+        public void GerarEtiquetaTransportadora_ShouldReturnZplAndTrackingNumber()
+        {
+            // Arrange
+            using var context = GetInMemoryDbContext();
+            var controller = new LogisticaController(context);
+            var payload = JsonDocument.Parse("{\"carrier_service\":\"CTT_EXPRESSO_13H\",\"recipient\":{\"name\":\"John Doe\"}}").RootElement;
+
+            // Act
+            var result = controller.GerarEtiquetaTransportadora(payload);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            dynamic value = okResult.Value!;
+            Assert.Equal("CTT_EXPRESSO_13H", value.GetType().GetProperty("Carrier").GetValue(value));
+            Assert.NotNull(value.GetType().GetProperty("TrackingNumber").GetValue(value));
+            Assert.Contains("^XA", value.GetType().GetProperty("ZplLabel").GetValue(value));
+        }
+
+        [Fact]
+        public async Task GetRmas_ShouldReturnAllRmas()
+        {
+            // Arrange
+            using var context = GetInMemoryDbContext();
+            var rma1 = new Rma { Id = Guid.NewGuid(), RmaCodigo = "RMA1", InvoiceRef = "INV1", Status = "Iniciada" };
+            var rma2 = new Rma { Id = Guid.NewGuid(), RmaCodigo = "RMA2", InvoiceRef = "INV2", Status = "Recebida" };
+            context.Rmas.AddRange(rma1, rma2);
+            await context.SaveChangesAsync();
+
+            var controller = new LogisticaController(context);
+
+            // Act
+            var result = await controller.GetRmas();
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            var rmas = Assert.IsAssignableFrom<IEnumerable<Rma>>(okResult.Value);
+            Assert.Equal(2, rmas.Count());
+        }
+
+        [Fact]
+        public async Task CriarRma_ShouldCreateRmaAndLines()
+        {
+            // Arrange
+            using var context = GetInMemoryDbContext();
+            var controller = new LogisticaController(context);
+            var dto = new RmaCriarDto
+            {
+                RmaCodigo = "RMA3",
+                InvoiceRef = "INV3",
+                ClienteNo = 12345,
+                Linhas = new List<RmaLinhaCriarDto>
+                {
+                    new RmaLinhaCriarDto { Ref = "PROD1", Quantidade = 5 }
+                }
+            };
+
+            // Act
+            var result = await controller.CriarRma(dto);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            dynamic value = okResult.Value!;
+            Guid rmaId = value.GetType().GetProperty("RmaId").GetValue(value);
+
+            var dbRma = await context.Rmas.Include(r => r.Linhas).FirstOrDefaultAsync(r => r.Id == rmaId);
+            Assert.NotNull(dbRma);
+            Assert.Equal("RMA3", dbRma.RmaCodigo);
+            Assert.Equal("Iniciada", dbRma.Status);
+            Assert.Single(dbRma.Linhas);
+            Assert.Equal("PROD1", dbRma.Linhas.First().Ref);
+            Assert.Equal(5, dbRma.Linhas.First().Quantidade);
+        }
+
+        [Fact]
+        public async Task UpdateRmaStatus_ShouldUpdateStatusWhenExists()
+        {
+            // Arrange
+            using var context = GetInMemoryDbContext();
+            var rmaId = Guid.NewGuid();
+            var rma = new Rma { Id = rmaId, RmaCodigo = "RMA1", InvoiceRef = "INV1", Status = "Iniciada" };
+            context.Rmas.Add(rma);
+            await context.SaveChangesAsync();
+
+            var controller = new LogisticaController(context);
+            var payload = JsonDocument.Parse($"{{\"RmaId\":\"{rmaId}\",\"Status\":\"Autorizada\"}}").RootElement;
+
+            // Act
+            var result = await controller.UpdateRmaStatus(payload);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            var dbRma = await context.Rmas.FindAsync(rmaId);
+            Assert.Equal("Autorizada", dbRma!.Status);
+        }
+
+        [Fact]
+        public async Task UpdateRmaStatus_ShouldReturnNotFoundWhenDoesNotExist()
+        {
+            // Arrange
+            using var context = GetInMemoryDbContext();
+            var controller = new LogisticaController(context);
+            var payload = JsonDocument.Parse($"{{\"RmaId\":\"{Guid.NewGuid()}\",\"Status\":\"Autorizada\"}}").RootElement;
+
+            // Act
+            var result = await controller.UpdateRmaStatus(payload);
+
+            // Assert
+            Assert.IsType<NotFoundObjectResult>(result);
+        }
+
+        [Fact]
+        public async Task GetPutawaySugestao_ShouldReturnNotFound_WhenProductDoesNotExist()
+        {
+            // Arrange
+            using var context = GetInMemoryDbContext();
+            var controller = new LogisticaController(context);
+
+            // Act
+            var result = await controller.GetPutawaySugestao("NONEXISTENT", 10);
+
+            // Assert
+            Assert.IsType<NotFoundObjectResult>(result);
+        }
+
+        [Fact]
+        public async Task GetPutawaySugestao_ShouldFallbackToClassLocation_WhenCapacityIsExceeded()
+        {
+            // Arrange
+            using var context = GetInMemoryDbContext();
+            context.Produtos.Add(new Produto { Ref = "PROD_A", RequerCq = false, PesoUnitarioKg = 100.0m, VolumeUnitarioM3 = 5.0m, ClasseAbc = 'A', PhcStamp = "ST_A" });
+            context.Localizacoes.Add(new Localizacao { Nome = "A-01", Zona = "A", Corredor = "1", Estante = "1", MaxPesoKg = 50m, MaxVolumeM3 = 2m, PhcStamp = "LOC_A" }); // Under size
+            await context.SaveChangesAsync();
+
+            var controller = new LogisticaController(context);
+
+            // Act
+            var result = await controller.GetPutawaySugestao("PROD_A", 1); // Exceeds weight 100 > 50
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            var res = Assert.IsType<PutawaySuggestionDto>(okResult.Value);
+            Assert.Equal("A-01", res.LocalizacaoId);
+            Assert.Contains("limites ignorados", res.Reason);
+        }
+
+        [Fact]
+        public async Task GetPutawaySugestao_ShouldFallbackToGeral_WhenNoLocationsExist()
+        {
+            // Arrange
+            using var context = GetInMemoryDbContext();
+            context.Produtos.Add(new Produto { Ref = "PROD_A", RequerCq = false, ClasseAbc = 'A', PhcStamp = "ST_A" });
+            await context.SaveChangesAsync();
+
+            var controller = new LogisticaController(context);
+
+            // Act
+            var result = await controller.GetPutawaySugestao("PROD_A", 1);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            var res = Assert.IsType<PutawaySuggestionDto>(okResult.Value);
+            Assert.Equal("GERAL", res.LocalizacaoId);
+            Assert.Contains("Localização GERAL recomendada", res.Reason);
+        }
+
+        [Fact]
+        public async Task GradeRmaLine_ShouldReturnNotFound_WhenRmaDoesNotExist()
+        {
+            // Arrange
+            using var context = GetInMemoryDbContext();
+            var controller = new LogisticaController(context);
+            var dto = new RmaGradeDto { RmaId = Guid.NewGuid(), LinhaId = Guid.NewGuid(), Grading = "A" };
+
+            // Act
+            var result = await controller.GradeRmaLine(dto);
+
+            // Assert
+            Assert.IsType<NotFoundObjectResult>(result);
+        }
+
+        [Fact]
+        public async Task GradeRmaLine_ShouldReturnNotFound_WhenLineDoesNotExist()
+        {
+            // Arrange
+            using var context = GetInMemoryDbContext();
+            var rmaId = Guid.NewGuid();
+            context.Rmas.Add(new Rma { Id = rmaId, RmaCodigo = "RMA1", Status = "Iniciada" });
+            await context.SaveChangesAsync();
+
+            var controller = new LogisticaController(context);
+            var dto = new RmaGradeDto { RmaId = rmaId, LinhaId = Guid.NewGuid(), Grading = "A" };
+
+            // Act
+            var result = await controller.GradeRmaLine(dto);
+
+            // Assert
+            Assert.IsType<NotFoundObjectResult>(result);
+        }
+
+        [Fact]
+        public async Task GradeRmaLine_ShouldRouteToPickingAtivo_WhenGradingIsA()
+        {
+            // Arrange
+            using var context = GetInMemoryDbContext();
+            var rmaId = Guid.NewGuid();
+            var lineId = Guid.NewGuid();
+            var rma = new Rma
+            {
+                Id = rmaId,
+                RmaCodigo = "RMA1",
+                Status = "Iniciada",
+                Linhas = new List<RmaLinha> { new RmaLinha { Id = lineId, Ref = "PROD1", Quantidade = 5 } }
+            };
+            context.Rmas.Add(rma);
+            await context.SaveChangesAsync();
+
+            var controller = new LogisticaController(context);
+            var dto = new RmaGradeDto { RmaId = rmaId, LinhaId = lineId, Grading = "A" };
+
+            // Act
+            var result = await controller.GradeRmaLine(dto);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            dynamic value = okResult.Value!;
+            Assert.Equal("PICKING-ATIVO", value.GetType().GetProperty("Destino").GetValue(value));
+        }
+
+        [Fact]
+        public async Task GradeRmaLine_ShouldRouteToSucata_WhenGradingIsC()
+        {
+            // Arrange
+            using var context = GetInMemoryDbContext();
+            var rmaId = Guid.NewGuid();
+            var lineId = Guid.NewGuid();
+            var rma = new Rma
+            {
+                Id = rmaId,
+                RmaCodigo = "RMA1",
+                Status = "Iniciada",
+                Linhas = new List<RmaLinha> { new RmaLinha { Id = lineId, Ref = "PROD1", Quantidade = 5 } }
+            };
+            context.Rmas.Add(rma);
+            await context.SaveChangesAsync();
+
+            var controller = new LogisticaController(context);
+            var dto = new RmaGradeDto { RmaId = rmaId, LinhaId = lineId, Grading = "C" };
+
+            // Act
+            var result = await controller.GradeRmaLine(dto);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            dynamic value = okResult.Value!;
+            Assert.Equal("QUARENTENA-SUCATA", value.GetType().GetProperty("Destino").GetValue(value));
+        }
+
+        [Fact]
+        public async Task GradeRmaLine_ShouldIncrementStockQty_WhenStockEntryAlreadyExists()
+        {
+            // Arrange
+            using var context = GetInMemoryDbContext();
+            var rmaId = Guid.NewGuid();
+            var lineId = Guid.NewGuid();
+            var rma = new Rma
+            {
+                Id = rmaId,
+                RmaCodigo = "RMA1",
+                Status = "Iniciada",
+                Linhas = new List<RmaLinha> { new RmaLinha { Id = lineId, Ref = "PROD1", Quantidade = 5 } }
+            };
+            context.Rmas.Add(rma);
+
+            context.Stocks.Add(new Stock
+            {
+                Ref = "PROD1",
+                Armazem = 1,
+                Localizacao = "PICKING-ATIVO",
+                Quantidade = 10m
+            });
+            await context.SaveChangesAsync();
+
+            var controller = new LogisticaController(context);
+            var dto = new RmaGradeDto { RmaId = rmaId, LinhaId = lineId, Grading = "A" };
+
+            // Act
+            var result = await controller.GradeRmaLine(dto);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            var dbStock = await context.Stocks.FirstOrDefaultAsync(s => s.Ref == "PROD1" && s.Localizacao == "PICKING-ATIVO");
+            Assert.NotNull(dbStock);
+            Assert.Equal(15m, dbStock.Quantidade); // 10 + 5 = 15
         }
     }
 }
