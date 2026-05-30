@@ -14,7 +14,7 @@ export default defineConfig({
     }
   },
   build: {
-    outDir: '../src/ServiceDomain.Api/wwwroot',
+    outDir: process.env.VERCEL || process.env.CI ? 'dist' : '../service_domain_api/src/ServiceDomain.Api/wwwroot',
     emptyOutDir: true
   }
 })

@@ -22,13 +22,13 @@ jobs:
         dotnet-version: '8.0'
 
     - name: Restore Backend Dependencies
-      run: dotnet restore
+      run: dotnet restore service_domain_api/ServiceDomain.sln
 
     - name: Build Backend Solution
-      run: dotnet build --no-restore --configuration Release
+      run: dotnet build service_domain_api/ServiceDomain.sln --no-restore --configuration Release
 
     - name: Run C# Unit Tests
-      run: dotnet test --no-build --configuration Release --verbosity normal
+      run: dotnet test service_domain_api/ServiceDomain.sln --no-build --configuration Release --verbosity normal
 
     # 2. Frontend Build
     - name: Setup Node.js
@@ -40,9 +40,9 @@ jobs:
 
     - name: Build React Frontend
       run: |
-        cd logistica-app
         npm ci
         npm run build
+      working-directory: ./logistica-app
 
   deploy:
     name: Deploy to Cloud (CD)
@@ -66,11 +66,13 @@ jobs:
       run: railway up --service ${{ env.RAILWAY_API_SERVICE }} -d
       env:
         RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      working-directory: ./service_domain_api
 
     - name: Deploy Worker to Railway
       run: railway up --service ${{ env.RAILWAY_WORKER_SERVICE }} -d
       env:
         RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      working-directory: ./service_domain_api
 
     # Deploy Frontend React App to Vercel (Official Vercel CLI)
     - name: Install Vercel CLI
